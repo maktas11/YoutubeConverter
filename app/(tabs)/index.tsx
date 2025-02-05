@@ -1,15 +1,13 @@
-import { StyleSheet, TextInput, Button, View, Text, Linking, Alert } from 'react-native';
+import { StyleSheet, TextInput, Button, View, Text, Linking, Alert, ScrollView } from 'react-native';
 import React, { useState } from 'react';
 
 export default function HomeScreen() {
   const [url, setUrl] = useState('');
   const [status, setStatus] = useState('');
-  const [downloadLink, setDownloadLink] = useState('');
+  const [downloadLinks, setDownloadLinks] = useState([]);  // Store multiple download links
 
   const handleDownload = async () => {
     setStatus('Processing...');
-    setDownloadLink('');  // Clear previous link
-
     try {
       const response = await fetch('http://192.168.1.162:5000/api/download', {
         method: 'POST',
@@ -22,7 +20,9 @@ export default function HomeScreen() {
       if (data.success) {
         setStatus('Download ready!');
         const fileUrl = `http://192.168.1.162:5000/api/file/${encodeURIComponent(data.filename)}`;
-        setDownloadLink(fileUrl);
+
+        // Add the new download link with title to the state
+        setDownloadLinks((prevLinks) => [...prevLinks, { title: data.title, url: fileUrl }]);
       } else {
         setStatus(`Error: ${data.error}`);
       }
@@ -42,14 +42,18 @@ export default function HomeScreen() {
       />
       <Button title="Download" onPress={handleDownload} />
       <Text style={styles.status}>{status}</Text>
-      {downloadLink ? (
-        <Text 
-          style={styles.link} 
-          onPress={() => Linking.openURL(downloadLink)} // Link opens when clicked
-        >
-          Download File
-        </Text>
-      ) : null}
+
+      <ScrollView style={styles.linkContainer}>
+        {downloadLinks.length > 0 && downloadLinks.map((link, index) => (
+          <Text
+            key={index}
+            style={styles.link}
+            onPress={() => Linking.openURL(link.url)} // Link opens when clicked
+          >
+            {link.title}  {/* Show video title as the download link */}
+          </Text>
+        ))}
+      </ScrollView>
     </View>
   );
 }
@@ -78,9 +82,18 @@ const styles = StyleSheet.create({
     marginTop: 16,
     fontSize: 16,
   },
-  link: {
+  linkContainer: {
     marginTop: 16,
-    color: 'blue',
-    textDecorationLine: 'underline',
+    marginBottom: 32,
+  },
+  link: {
+    marginTop: 12,
+    padding: 12,
+    backgroundColor: '#007BFF',
+    color: 'white',
+    textAlign: 'center',
+    borderRadius: 4,
+    fontSize: 16,
+    textDecorationLine: 'none',
   },
 });

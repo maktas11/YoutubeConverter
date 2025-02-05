@@ -1,4 +1,4 @@
-from flask import Flask, request, jsonify, send_file, send_from_directory
+from flask import Flask, request, jsonify, send_from_directory
 from yt_dlp import YoutubeDL
 import os
 
@@ -28,8 +28,9 @@ def download_video():
         with YoutubeDL(options) as ydl:
             info = ydl.extract_info(video_url, download=True)
             filename = ydl.prepare_filename(info).replace('.webm', '.mp3').replace('.m4a', '.mp3')
+            title = info.get('title', 'Untitled')  # Extract the title of the video
 
-        return jsonify({'success': True, 'filename': filename})
+        return jsonify({'success': True, 'filename': filename, 'title': title})
     except Exception as e:
         return jsonify({'error': str(e)}), 500
 
@@ -37,10 +38,8 @@ def download_video():
 @app.route('/api/file/<filename>', methods=['GET'])
 def get_file(filename):
     print(f"Request for file: {filename}")  # Log the incoming request
-    
     # Remove "downloads\\" from the filename
     filename = filename.replace('downloads\\', '')
-    
     directory = r'C:\Users\xivo\Desktop\YoutubeConverter\downloads'  # Correct downloads folder path
     try:
         # Using send_from_directory to serve the file correctly
