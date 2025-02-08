@@ -1,5 +1,9 @@
 {
   "expo": {
+    "permissions": [
+      "READ_EXTERNAL_STORAGE",
+      "WRITE_EXTERNAL_STORAGE"
+    ],
     "name": "YoutubeConverter",
     "slug": "YoutubeConverter",
     "version": "1.0.0",

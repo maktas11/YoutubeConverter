@@ -1,6 +1,7 @@
-from flask import Flask, request, jsonify, send_from_directory
+from flask import Flask, request, jsonify, send_file
 from yt_dlp import YoutubeDL
-import os
+from io import BytesIO
+import logging
 
 app = Flask(__name__)
 
@@ -14,43 +15,44 @@ def download_video():
 
     try:
         options = {
-            'format': 'bestaudio/best',  # You can change this to 'bestvideo+bestaudio' for MP4
+            'format': 'bestaudio/best',  # Prioritize best audio
             'postprocessors': [{
                 'key': 'FFmpegExtractAudio',
                 'preferredcodec': 'mp3',
                 'preferredquality': '192',
             }],
-            'outtmpl': 'downloads/%(title)s.%(ext)s',  # Save in a "downloads" folder
-            'ffmpeg_location': r'C:\Users\xivo\Documents\ffmpeg\ffmpeg-n7.1-latest-win64-gpl-7.1\bin',  # Correct FFmpeg path
-            'ffprobe_location': r'C:\Users\xivo\Documents\ffmpeg\ffmpeg-n7.1-latest-win64-gpl-7.1\bin',  # Correct FFprobe path
+            'ffmpeg_location': r'C:\Users\xivo\Documents\ffmpeg\ffmpeg-n7.1-latest-win64-gpl-7.1\bin',
+            'outtmpl': '-',  # Output to memory
+            'quiet': True,
+            'encoding': 'utf-8',
         }
 
         with YoutubeDL(options) as ydl:
-            info = ydl.extract_info(video_url, download=True)
-            filename = ydl.prepare_filename(info).replace('.webm', '.mp3').replace('.m4a', '.mp3')
-            title = info.get('title', 'Untitled')  # Extract the title of the video
+            info = ydl.extract_info(video_url, download=False)
+            
+            # Find the first format with a valid URL
+            audio_format = next(
+                (fmt for fmt in info.get('formats', []) if fmt.get('acodec') != 'none' and 'url' in fmt), 
+                None
+            )
+            
+            if not audio_format:
+                return jsonify({'error': 'No suitable audio format found'}), 400
 
-        return jsonify({'success': True, 'filename': filename, 'title': title})
+            audio_url = audio_format['url']
+            filename = f"{info['title']}.mp3"
+
+            # Download audio data into memory
+            audio_data = BytesIO()
+            response = ydl.urlopen(audio_url)
+            audio_data.write(response.read())
+            audio_data.seek(0)
+
+            return send_file(audio_data, as_attachment=True, download_name=filename, mimetype='audio/mpeg')
+
     except Exception as e:
         return jsonify({'error': str(e)}), 500
 
 
-@app.route('/api/file/<filename>', methods=['GET'])
-def get_file(filename):
-    print(f"Request for file: {filename}")  # Log the incoming request
-    # Remove "downloads\\" from the filename
-    filename = filename.replace('downloads\\', '')
-    directory = r'C:\Users\xivo\Desktop\YoutubeConverter\downloads'  # Correct downloads folder path
-    try:
-        # Using send_from_directory to serve the file correctly
-        return send_from_directory(directory, filename, as_attachment=True)
-    except Exception as e:
-        return jsonify({'error': str(e)}), 404
-
-
 if __name__ == '__main__':
-    # Ensure the "downloads" folder exists
-    if not os.path.exists(r'C:\Users\xivo\Desktop\YoutubeConverter\downloads'):
-        os.makedirs(r'C:\Users\xivo\Desktop\YoutubeConverter\downloads')  # Correct path to downloads folder
-    # Run the Flask app, allowing external connections on the local network
-    app.run(host='0.0.0.0', port=5000, debug=True)
+    app.run(host='0.0.0.0', port=5000)
