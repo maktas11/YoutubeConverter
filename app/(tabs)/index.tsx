@@ -1,99 +1,136 @@
-import { StyleSheet, TextInput, Button, View, Text, Linking, Alert, ScrollView } from 'react-native';
+import * as FileSystem from 'expo-file-system';
 import React, { useState } from 'react';
-
-export default function HomeScreen() {
-    const [url, setUrl] = useState('');
-    const [status, setStatus] = useState('');
-    const [downloadLinks, setDownloadLinks] = useState([]);  // Store multiple download links
-
-    const handleDownload = async () => {
-        setStatus('Processing...');
-        try {
-        const response = await fetch('http://192.168.1.162:5000/api/download', {
-            method: 'POST',
-            headers: { 'Content-Type': 'application/json' },
-            body: JSON.stringify({ url }),
-        });
-
-        const data = await response.json();
-
-        if (data.success) {
-            setStatus('Download ready!');
-            const fileUrl = `http://192.168.1.162:5000/api/file/${encodeURIComponent(data.filename)}`;
-
-            // Add the new download link with title to the state
-            setDownloadLinks((prevLinks) => [...prevLinks, { title: data.title, url: fileUrl }]);
-        } else {
-            setStatus(`Error: ${data.error}`);
-        }
-        } catch (error) {
-        setStatus(`Error: ${error}`);
-        }
-    };
-
-    return (
-        <View style={styles.container}>
-        <Text style={styles.title}>YouTube Downloader</Text>
-        <TextInput
-            style={styles.input}
-            placeholder="Enter YouTube URL"
-            value={url}
-            onChangeText={setUrl}
-        />
-        <Button title="Download" onPress={handleDownload} />
-        <Text style={styles.status}>{status}</Text>
-
-        <ScrollView style={styles.linkContainer}>
-            {downloadLinks.length > 0 && downloadLinks.map((link, index) => (
-            <Text
-                key={index}
-                style={styles.link}
-                onPress={() => Linking.openURL(link.url)} // Link opens when clicked
-            >
-                {link.title}  {/* Show video title as the download link */}
-            </Text>
-            ))}
-        </ScrollView>
-        </View>
-    );
-}
+import { View, TextInput, Button, FlatList, Text, Image, TouchableOpacity, StyleSheet, Alert } from 'react-native';
+import * as MediaLibrary from 'expo-media-library'; // For saving to media library (like Downloads)
 
 const styles = StyleSheet.create({
     container: {
+        flex: 1,
         padding: 16,
-        marginTop: 100,
-        backgroundColor: 'white',
-    },
-    title: {
-        fontSize: 20,
-        fontWeight: 'bold',
-        marginBottom: 16,
-        backgroundColor: 'white',
+        backgroundColor: '#ffffff',
     },
     input: {
-        borderColor: '#ccc',
+        height: 40,
+        borderColor: '#cccccc',
         borderWidth: 1,
-        padding: 8,
-        borderRadius: 4,
-        marginBottom: 16,
-        backgroundColor: 'white',
+        marginBottom: 12,
+        paddingHorizontal: 8,
+        backgroundColor: '#f9f9f9',
+        marginTop: 30,
+    },
+    videoItem: {
+        flexDirection: 'row',
+        marginBottom: 12,
+    },
+    thumbnail: {
+        width: 120,
+        height: 90,
+        marginRight: 8,
+    },
+    videoInfo: {
+        flex: 1,
+        justifyContent: 'center',
+    },
+    title: {
+        fontSize: 16,
+        fontWeight: 'bold',
+        color: '#000000',
+    },
+    description: {
+        fontSize: 14,
+        color: '#606060',
     },
     status: {
         marginTop: 16,
         fontSize: 16,
     },
-    linkContainer: {
-        marginTop: 16,
-        marginBottom: 32,
-    },
-    link: {
-        marginTop: 12,
-        padding: 12,
-        backgroundColor: '#007BFF',
-        color: 'white',
-        textAlign: 'center',
-        borderRadius: 4,
-        fontSize: 16,
-        textDecorationLine: 'none',
-    },
 });
+
+const YouTubeSearch = () => {
+    const [query, setQuery] = useState('');
+    const [results, setResults] = useState([]);
+    const [status, setStatus] = useState('');
+    const [selectedVideo, setSelectedVideo] = useState(null);
+    
+
+    const searchYouTube = async () => {
+        const apiKey = 'AIzaSyDb7SDhbU3yhjABTPXgEfcHFwISoGCqi2M';
+        const url = `https://www.googleapis.com/youtube/v3/search?part=snippet&q=${query}&type=video&maxResults=10&key=${apiKey}`;
+        try {
+            const response = await fetch(url);
+            const data = await response.json();
+            setResults(data.items || []);
+        } catch (error) {
+            console.error("error1" + error);
+        }
+    };
+
+    const handlePress = (videoId, title) => {
+        setSelectedVideo({ videoId, title });
+    };
+
+    const handleDownload = async () => {
+        if (!selectedVideo) return;
+    
+        setStatus('Processing...');
+        try {
+            const response = await fetch('http://192.168.1.162:5000/api/download', {
+                method: 'POST',
+                headers: { 'Content-Type': 'application/json' },
+                body: JSON.stringify({ url: `https://www.youtube.com/watch?v=${selectedVideo.videoId}` }),
+            });
+    
+            const blob = await response.blob();
+            const fileUri = FileSystem.documentDirectory + selectedVideo.title + '.mp3';  // Save in internal storage
+            const { uri } = await FileSystem.downloadAsync(response.url, fileUri);
+            console.log("File downloaded to: " + uri);
+            await MediaLibrary.createAssetAsync(uri);
+            await MediaLibrary.getAlbumAsync('Download');
+            setStatus('Download complete!');
+            Alert.alert('Download complete', 'The MP3 file has been saved to your device.');
+        } catch (error) {
+            setStatus(`Error: ${error}`);
+        }
+    };
+
+    return (
+        <View style={styles.container}>
+            <TextInput
+                style={styles.input}
+                placeholder="Search YouTube"
+                value={query}
+                onChangeText={setQuery}
+            />
+            <Button title="Search" onPress={searchYouTube} color="#ff0000" />
+
+            <FlatList
+                data={results}
+                keyExtractor={(item) => item.id.videoId}
+                renderItem={({ item }) => (
+                    <TouchableOpacity onPress={() => handlePress(item.id.videoId, item.snippet.title)}>
+                        <View style={styles.videoItem}>
+                            <Image
+                                style={styles.thumbnail}
+                                source={{ uri: item.snippet.thumbnails.default.url }}
+                            />
+                            <View style={styles.videoInfo}>
+                                <Text style={styles.title}>{item.snippet.title}</Text>
+                                <Text style={styles.description}>{item.snippet.description}</Text>
+                            </View>
+                        </View>
+                    </TouchableOpacity>
+                )}
+            />
+
+            {selectedVideo && (
+                <View>
+                    <Text style={styles.status}>Selected video: {selectedVideo.title}</Text>
+                    <Button title="Download MP3" onPress={handleDownload} color="#ff0000" />
+                    <Text style={styles.status}>{status}</Text>
+                </View>
+            )}
+        </View>
+    );
+};
+
+export default YouTubeSearch;

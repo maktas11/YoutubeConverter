@@ -20,7 +20,7 @@ export default function TabLayout() {
         tabBarBackground: TabBarBackground,
       }}>
       <Tabs.Screen
-        name="youtube"
+        name="index"
         options={{
           title: 'youtube',
           tabBarIcon: ({ color }) => <IconSymbol size={28} name="house.fill" color={color} />,
